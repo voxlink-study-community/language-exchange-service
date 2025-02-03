@@ -19,7 +19,7 @@ You may ask up to 2 follow-up questions for clarification or more detail after t
 
 Rules:  
 1. Strictly limit follow-up questions to a maximum of 2 per main question.  
-2. If the user provides a positive or neutral answer that is not overly elaborate, ask follow-ups to encourage more detail or exploration of their thoughts.  
+2. If the user provides a positive or neutral answer that is not overly elaborate, ask follow-up questions to encourage more detail or exploration of their thoughts.  
 3. If the user provides an elaborate or comprehensive answer, skip follow-ups and proceed to the next question after providing a brief reaction.  
 4. If the user skips a question or is uninterested, acknowledge this and move to the next question.  
 5. All responses must be in Korean.  
@@ -36,6 +36,14 @@ Main Questions:
 3. 중요하게 생각하는 개인적인 가치나 목표가 있으신가요? 예를 들어, 가족, 커리어, 자기 개발 등 어떤 것들이 있나요?  
 4. 보통 스트레스를 어떻게 관리하시나요? 휴식, 운동, 취미 활동 등 어떤 방법을 사용하시나요?  
 
+Follow-up Question Guidelines:  
+1. If the user gives a neutral or positive response but lacks detail, ask follow-ups to explore further (e.g., "그럼 구체적으로 어떤 활동을 해보고 싶으세요?" or "그 이유를 좀 더 들려주실 수 있나요?").  
+2. If the user explicitly declines to elaborate or expresses disinterest, skip follow-ups and proceed to the next main question with a brief acknowledgment.  
+3. Ensure follow-ups are friendly and encourage conversation without pressuring the user.  
+
+Termination:  
+If the user explicitly asks to stop, politely end the conversation in Korean.
+
 Closing the Conversation:  
 After all four main questions (and optional follow-ups) have been asked, conclude the conversation with:  
 "감사합니다. 고객님과의 대화가 즐거웠습니다. 좋은 하루 보내세요!"
@@ -44,6 +52,16 @@ After all four main questions (and optional follow-ups) have been asked, conclud
 # Streamlit 상태 초기화
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+
+if "conversation_done" not in st.session_state:
+    st.session_state.conversation_done = False
+
+if ("email" and "password" and "name") not in st.session_state:
+    print("chat_session:  user_data가 없습니다!")
+else:
+    print('====================user_info=======================')
+    print(f"{st.session_state.get("email")}, {st.session_state.get("name"), st.session_state.get("password")}")
+
 
 # 메시지 추가 함수
 def add_message(role, content):
@@ -54,6 +72,22 @@ def add_message(role, content):
 def save_chat_history_to_json(file_path="chat_history.json"):
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(st.session_state.chat_history, f, ensure_ascii=False, indent=4)
+
+# 고객 정보를 JSON 파일로 저장하는 함수 (기존 데이터에 추가)
+def save_user_data_to_json(new_user_data, file_path="user_data.json"):
+    # 기존 데이터 로드
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            user_data = json.load(f)
+    else:
+        user_data = []
+
+    # 새로운 데이터를 리스트에 추가
+    user_data.append(new_user_data)
+
+    # 업데이트된 데이터를 다시 파일에 저장
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(user_data, f, ensure_ascii=False, indent=4)
 
 # Streamlit UI 구성
 st.title("💬 사용자의 이야기를 들려주세요.")
@@ -108,6 +142,12 @@ if user_input := st.chat_input("메시지를 입력하세요:"):
         # 모델 응답 추가
         add_message("assistant", response_content)
         st.chat_message("assistant").write(response_content)
+        save_chat_history_to_json()
+        print("대화 기록이 chat_history.json 파일로 저장되었습니다.")
+
+        # 대화 종료 메시지 확인
+        if "즐거웠습니다" in response_content:
+            st.session_state.conversation_done = True
 
     except Exception as e:
         response_content = f"오류가 발생했습니다: {e}"
@@ -115,7 +155,28 @@ if user_input := st.chat_input("메시지를 입력하세요:"):
         st.chat_message("assistant").write(response_content)
 
 # 디버깅: 상태 출력
-print("======= 최종 대화 기록 =======")
+print("=======회원가입 최종 대화 기록 =======")
 for message in st.session_state.chat_history:
     print(f"{message['role']}: {message['content']}")
 print("=========================")
+
+# 대화 종료 후 회원가입 완료 버튼 표시
+if st.session_state.conversation_done:
+    st.success("대화가 종료되었습니다. 회원가입을 완료하려면 아래 버튼을 클릭하세요.")
+    if st.button("회원가입 완료"):
+        # 고객 정보 저장
+        user_data = {
+            "email": st.session_state.get("email"),
+            "name": st.session_state.get("name"),
+            "password": st.session_state.get("password"),
+            "friends": {},
+            "chat_history": st.session_state.chat_history,
+        }
+        print(user_data)
+        save_user_data_to_json(user_data)
+        st.session_state.chat_history = []  # 대화 기록 초기화
+        st.session_state.conversation_done = False  # 상태 초기화
+        st.session_state["page"] = "login"  # 메인 페이지로 전환
+        st.success("회원 가입이 완료되었습니다. 로그인 창에서 로그인 해주세요")
+        st.session_state.clear()
+        st.switch_page("pages/login.py")
